@@ -3,16 +3,17 @@ const fs = require('fs');
 const path = require('path')
 
 const { dataDir, bundleDir, srcBaseDir } = require('./constants')
-const { computeFileUrl, computeUrl } = require('./utils.js').utils
+const { computeFileUrl, computeUrl } = require('./utils.js').utils;
+const { send } = require('process');
 
-const borders = {
-    left: 23 / 120,
-    top: 23 / 120,
-    right: 23 / 120,
-    bottom: 23 / 120
-}
 const worldSize = { width: 8, height: 8 }
 const clientPixelsPerUnit = 100;
+
+let connectionSize = {
+    width: 36,
+    height: 36
+}
+
 
 function getPuzzleFileName(isCorner) {
     let puzzleFile = ''
@@ -42,7 +43,84 @@ function getPuzzleFileName(isCorner) {
     return puzzleFile + '.png'
 }
 
-async function generatePiece(level, levelName, srcDir, srcImg, puzzleSize, worldPieceSize, column, line, originalPieceSize, defaultFinalPieceSize) {
+async function createPuzzleMask(finalSize, hasConnections, isCorner, dataDir, ingamePieceSize){
+
+
+    let puzzle = await sharp({
+        create: {
+          width: Math.ceil(finalSize.width),
+          height: Math.ceil(finalSize.height),
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+      }).png()
+
+    let composition = []
+    let gravity = ''
+
+    if(hasConnections.top && hasConnections.bottom && hasConnections.left && hasConnections.right){
+        gravity = 'centre'
+    }
+    else{
+        if(!hasConnections.top){
+            gravity = 'north'
+        }
+        else if(!hasConnections.bottom){
+            gravity = 'south'
+        }
+        
+        if(!hasConnections.left){
+            gravity += 'west'
+        }
+        else if(!hasConnections.right){
+            gravity += 'east'
+        }
+    }
+
+    let margin = {
+        left: hasConnections.left ? connectionSize.width : 0,
+        top: hasConnections.top ? connectionSize.height : 0,
+    }
+    
+    composition.push({ input: await sharp(path.join(dataDir, 'puzzle', 'parts', 'plain.png')).resize(Math.ceil(ingamePieceSize.width), Math.ceil(ingamePieceSize.height)).toBuffer(), gravity: gravity, blend: 'source' })
+
+    let sides = [
+        { side:'left', rotation: 0, position:{
+            left: 0,
+            top: ingamePieceSize.height / 2 - connectionSize.height + margin.top
+        }}, 
+        { side:'top', rotation: 90, position:{
+            left: ingamePieceSize.width / 2 - connectionSize.width + margin.left,
+            top: 0
+        }}, 
+        { side:'right', rotation: 180, position:{
+            left: finalSize.width - connectionSize.width,
+            top: ingamePieceSize.height / 2 - connectionSize.height  + margin.top,
+        }}, 
+        { side:'bottom', rotation: 270, position:{
+            left: ingamePieceSize.width / 2 - connectionSize.width + margin.left,
+            top: finalSize.height - connectionSize.height,
+        }}]
+    console.log(sides)
+    for(let side of sides){
+        if(!isCorner[side.side]){
+            let blend = hasConnections[side.side] ? 'over' : 'dest-out'
+            let rotation = hasConnections[side.side] ? side.rotation : (side.rotation + 180) % 360
+            composition.push({ 
+                input: await sharp(path.join(dataDir, 'puzzle', 'parts', 'left.png')).rotate(rotation).resize({width: connectionSize.width, height: connectionSize.height, fit: 'outside'}).toBuffer(),
+                blend: blend, 
+                left: Math.floor(side.position.left),
+                top: Math.floor(side.position.top), })
+        }
+    }
+    
+    puzzle = puzzle.composite(composition)
+
+
+    return puzzle
+}
+
+async function generatePiece(level, levelName, srcDir, srcImg, puzzleSize, worldPieceSize, column, line, originalPieceSize, ingamePieceSize, hasConnections) {
     let pieceName = line + "-" + column
     let pieceFile = pieceName + ".png"
 
@@ -52,52 +130,31 @@ async function generatePiece(level, levelName, srcDir, srcImg, puzzleSize, world
         right: column == puzzleSize.width - 1,
         bottom: line == puzzleSize.height - 1,
     }
-    let hasConnections = {
-        left: !isCorner.left,
-        top: !isCorner.top,
-        right: false,
-        bottom: false,
+
+    let marginsToApply = {
+        left: connectionSize.width * hasConnections.left,
+        top: connectionSize.height * hasConnections.top,
+        right: connectionSize.width * hasConnections.right,
+        bottom: connectionSize.height * hasConnections.bottom,
     }
 
-    let borderPercentToApply = {
-        left: hasConnections.left ? borders.left : 0,
-        top: hasConnections.top ? borders.top : 0,
-        right: hasConnections.right ? borders.right : 0,
-        bottom: hasConnections.bottom ? borders.bottom : 0,
-    }
-
-    let originalBorderToApply = {
-        left: Math.floor(borderPercentToApply.left * originalPieceSize.width),
-        top: Math.floor(borderPercentToApply.top * originalPieceSize.height),
-        right: Math.floor(borderPercentToApply.right * originalPieceSize.width),
-        bottom: Math.floor(borderPercentToApply.bottom * originalPieceSize.height),
-    }
-
-    let originalOffset = {
-        left: Math.floor(column * originalPieceSize.width - originalBorderToApply.left),
-        top: Math.floor(line * originalPieceSize.height - originalBorderToApply.top),
-        width: Math.floor(originalPieceSize.width + originalBorderToApply.right + originalBorderToApply.left),
-        height: Math.floor(originalPieceSize.height + originalBorderToApply.top + originalBorderToApply.bottom),
+    let offsetToExtract = {
+        left: Math.floor(column * originalPieceSize.width - marginsToApply.left),
+        top: Math.floor(line * originalPieceSize.height - marginsToApply.top),
+        width: Math.floor(originalPieceSize.width + marginsToApply.right + marginsToApply.left),
+        height: Math.floor(originalPieceSize.height + marginsToApply.top + marginsToApply.bottom),
     };
 
-
-    let finalBorderToApply = {
-        left: borderPercentToApply.left * defaultFinalPieceSize.width,
-        top: borderPercentToApply.top * defaultFinalPieceSize.height,
-        right: borderPercentToApply.right * defaultFinalPieceSize.width,
-        bottom: borderPercentToApply.bottom * defaultFinalPieceSize.height,
-    }
-
     let worldBorderToApply = {
-        left: finalBorderToApply.left / clientPixelsPerUnit,
-        top: finalBorderToApply.top / clientPixelsPerUnit,
-        right: finalBorderToApply.right / clientPixelsPerUnit,
-        bottom: finalBorderToApply.bottom / clientPixelsPerUnit,
+        left: marginsToApply.left / clientPixelsPerUnit,
+        top: marginsToApply.top / clientPixelsPerUnit,
+        right: marginsToApply.right / clientPixelsPerUnit,
+        bottom: marginsToApply.bottom / clientPixelsPerUnit,
     }
 
     let finalSize = {
-        width: defaultFinalPieceSize.width + finalBorderToApply.left + finalBorderToApply.right,
-        height: defaultFinalPieceSize.height + finalBorderToApply.top + finalBorderToApply.bottom,
+        width: ingamePieceSize.width + marginsToApply.left + marginsToApply.right,
+        height: ingamePieceSize.height + marginsToApply.top + marginsToApply.bottom,
     }
 
     let worldPosition = {
@@ -105,15 +162,17 @@ async function generatePiece(level, levelName, srcDir, srcImg, puzzleSize, world
         y: line * worldPieceSize.height + (worldPieceSize.height + worldBorderToApply.top + worldBorderToApply.bottom) / 2 - worldBorderToApply.top,
     }
 
+    let puzzle = await createPuzzleMask(finalSize, hasConnections, isCorner, dataDir, ingamePieceSize);
 
-    let puzzle = await sharp(path.join(dataDir, 'puzzle', getPuzzleFileName(isCorner)))
-        .resize(Math.ceil(finalSize.width), Math.ceil(finalSize.height))
-        .toBuffer()
-
+    puzzle.clone().toFile(path.join(srcDir, "puzzle-"+pieceFile), function (err) {
+        if (err) {
+            console.log(err)
+        }
+    })
     srcImg.clone()
-        .extract(originalOffset)
+        .extract(offsetToExtract)
         .resize(Math.ceil(finalSize.width), Math.ceil(finalSize.height))
-        .composite([{ input: puzzle, blend: 'dest-in' }])
+        .composite([{ input: await puzzle.toBuffer(), blend: 'dest-in' }])
         .toFile(path.join(srcDir, pieceFile), function (err) {
             if (err) {
                 console.log(err)
@@ -146,19 +205,38 @@ async function generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata, r
         width: metadata.width / puzzleSize.width,
         height: metadata.height / puzzleSize.height,
     }
+
+    let imageRatio = originalPieceSize.width / originalPieceSize.height
     const worldPieceSize = {
-        width: worldSize.width / puzzleSize.width,
         height: worldSize.height / puzzleSize.height
     }
+    worldPieceSize.width = imageRatio * worldPieceSize.height
 
-    const finalPieceSize = {
+    const ingamePieceSize = {
         width: worldPieceSize.width * clientPixelsPerUnit,
         height: worldPieceSize.height * clientPixelsPerUnit
     }
 
+    let connections = []
+
     for (let line = 0; line < puzzleSize.height; ++line) {
         for (let column = 0; column < puzzleSize.width; ++column) {
-            await generatePiece(level, levelName, srcDir, srcImg, puzzleSize, worldPieceSize, column, line, originalPieceSize, finalPieceSize);
+
+            let isCorner = {
+                left: column == 0,
+                top: line == 0,
+                right: column == puzzleSize.width - 1,
+                bottom: line == puzzleSize.height - 1,
+            }
+            let hasConnections = {
+                left: !isCorner.left && !connections[line+"-"+(column-1)].right,
+                top: !isCorner.top && !connections[(line-1)+"-"+column].bottom,
+                right: !isCorner.right && Math.floor(Math.random() * 2) == 0,
+                bottom: !isCorner.bottom && Math.floor(Math.random() * 2) == 0
+            }
+            connections[line+"-"+column] = hasConnections
+
+            await generatePiece(level, levelName, srcDir, srcImg, puzzleSize, worldPieceSize, column, line, originalPieceSize, ingamePieceSize, hasConnections);
         }
     }
     let levelFile = path.join(srcDir, "level.json")
