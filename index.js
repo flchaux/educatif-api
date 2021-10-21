@@ -4,34 +4,28 @@ const app = express()
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const puzzle = require('./puzzle.js')
-const { computeUrl, computeFileUrl, computeFilePath } = require('./utils.js').utils
-const { dataDir, bundleDir, srcBaseDir, port } = require('./constants')
+const levelManager = require('./level.js')
+const { computeTmpImagePath, computeUrl, computeFileUrl, computeLevelFilePath: computeFilePath } = require('./utils.js').utils
+const { dataDir, levelBaseDir, port, tmpDir } = require('./constants')
 const fileUpload = require('express-fileupload');
+const {useListLevels} = require('./useListLevels');
+const { randomUUID } = require('crypto');
+const playlist = require('./playlist')
 
-
-
-async function listBundles(req, res, filterType) {
-    let files = await fsPromises.readdir(srcBaseDir)
-    let bundles = []
-    let i = 0
-    for (let file of files) {
-        let p = path.join(srcBaseDir, file)
-        let stats = await fsPromises.stat(p);
-        if (stats.isDirectory()) {
-            let text = await fsPromises.readFile(computeFilePath(file, "level.json"));
-            const data = JSON.parse(text)
-            type = data.type
-            if (filterType == null || filterType === type) {
-                bundles.push({
-                    "bundle": file,
-                    "url": computeFileUrl(file, "level.json"),
-                    "type": type
-                })
-            }
-        }
-    }
-    res.send(JSON.stringify(bundles))
+async function handleListLevels(req, res, filterType) {
+    res.send(JSON.stringify(await useListLevels(filterType)))
 }
+
+function handleDeleteLevel(req, res){
+    let srcDir = path.join(levelBaseDir, req.query.level);
+    fs.rmdirSync(srcDir, {
+        recursive: true,
+        force: true
+    });
+    res.send()
+}
+
+app.use(express.json())
 
 app.use(fileUpload({
     limits: { fileSize: 50 * 1024 * 1024 },
@@ -56,29 +50,76 @@ app.use(function (req, res, next) {
     next();
 });
 
-app.get('/bundle', function (req, res) {
-    res.sendFile(path.join(bundleDir, req.query.level))
-})
-app.get('/bundle/:level', function (req, res) {
+app.get('/level/:level', function (req, res) {
     res.sendFile(computeFilePath(req.params.level, "level.json"))
 })
-app.get('/bundle/:level/:file', function (req, res) {
+app.get('/level/:level/:file', function (req, res) {
     res.sendFile(computeFilePath(req.params.level, req.params.file))
 })
-app.get('/bundles', function (req, res) {
-    listBundles(req, res)
+app.get('/levels', function (req, res) {
+    handleListLevels(req, res)
 })
-app.get('/bundles/:type', function (req, res) {
-    listBundles(req, res, req.params.type)
+app.get('/levels/:type', function (req, res) {
+    handleListLevels(req, res, req.params.type)
+})
+app.delete('/delete', function (req, res) {
+    handleDeleteLevel(req, res)
 })
 
-app.get('/generate/puzzle', function (req, res) {
+app.patch('/generate/puzzle', function (req, res) {
     puzzle.handleGeneratePuzzleWithExistingFile(req, res);
 })
 app.post('/generate/puzzle', function (req, res) {
     puzzle.handleGeneratePuzzle(req, res);
 })
+app.get('/generate/puzzle/all', function (req, res) {
+    puzzle.regenerateAll(req, res);
+})
+app.post('/level', function (req, res) {
+    levelManager.handleCreateLevel(req, res)
+})
+app.get('/playlist', async function (req, res) {
+    res.send(JSON.stringify(await playlist.list()))
+})
+app.get('/playlist/:playlistName', async function (req, res) {
+    res.send(JSON.stringify(await playlist.load(req.params.playlistName)))
+})
+app.post('/playlist/:playlistName', async function (req, res) {
+    res.send(JSON.stringify(playlist.update(req.params.playlistName, req.body)))
+})
+app.post('/playlist', async function (req, res) {
+    res.send(JSON.stringify(playlist.create(req.body.name, req.body.levels)))
+})
+
+app.delete('/playlist/:playlistName', async function (req, res) {
+    try{
+        playlist.delete(req.params.playlistName)
+        res.send(JSON.stringify({success: true}))
+    }
+    catch{
+        res.statusCode(400)
+    }
+})
+
+
+app.post('/image', function (req, res) {
+    const image = req.files.image;
+
+    if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir);
+    }
+    const id = randomUUID()
+    const imagePath = computeTmpImagePath(id)
+    image.mv(imagePath, function (err) {
+        if (err)
+            return res.status(500).send(err);
+        return res.send(JSON.stringify({
+            id: id
+        }))
+    })
+})
 
 console.log("Listen " + port);
 
 app.listen(port)
+
