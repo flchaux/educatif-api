@@ -10,6 +10,7 @@ const vector = require('./vector')
 
 const maxWorldHeight = 8
 const clientPixelsPerUnit = 100;
+const backgroundWorldSize = { width: 16, height: 10 }
 
 let connectionSize = {
     width: 17,
@@ -81,7 +82,7 @@ async function createPuzzleMask(finalSize, margin, hasConnections, isCorner, pla
     return puzzle
 }
 async function generatePiece(levelName, srcDir, srcImg, puzzleSize, imageSize, worldSize, column, line, plainPieceSize, hasConnections) {
-    
+
     let pieceName = line + "-" + column
     let pieceFile = pieceName + ".png"
 
@@ -98,8 +99,8 @@ async function generatePiece(levelName, srcDir, srcImg, puzzleSize, imageSize, w
         x: plainPieceSize.width * column,
         y: plainPieceSize.height * line
     }
-    
-    let offsetToExtract =  {
+
+    let offsetToExtract = {
         ...finalSize,
         ...vector.translate(positionToExtract, vector.multiplyConstant(marginsToApply, -1))
     }
@@ -110,7 +111,7 @@ async function generatePiece(levelName, srcDir, srcImg, puzzleSize, imageSize, w
 
     let finalPosition = vector.computeCenterBounds(offsetToExtract)
 
-    let worldPosition = vector.switchCoordinateSystem(imageSize, {...worldSize, vertical: 'bottomToTop'}, finalPosition,)
+    let worldPosition = vector.switchCoordinateSystem(imageSize, { ...worldSize, vertical: 'bottomToTop' }, finalPosition,)
 
     let puzzle = await createPuzzleMask(finalSize, marginsToApply, hasConnections, isCorner, plainPieceSize);
 
@@ -129,18 +130,17 @@ async function generatePiece(levelName, srcDir, srcImg, puzzleSize, imageSize, w
                 console.log(err)
             }
         })
+    let validPosition = {x: worldPosition.x, y: worldPosition.y}
 
     return {
         "image": pieceFile,
-        "positionX": worldPosition.x,
-        // reverse y because unity use bottom to top coordinates
-        "positionY": worldPosition.y,
+        validPosition,
         "id": pieceName,
         "url": computeFileUrl(levelName, pieceFile)
     }
 }
 
-async function generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata) {
+async function generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata, backgroundImg) {
     let worldSize = {
         height: maxWorldHeight,
     }
@@ -150,8 +150,8 @@ async function generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata) {
     let resizedImage = sharp(await srcImg.resize(vector.floor(finalImageSize)).toBuffer())
 
     const plainPieceSize = vector.multiply(finalImageSize, {
-        width: 1/puzzleSize.width,
-        height: 1/puzzleSize.height,
+        width: 1 / puzzleSize.width,
+        height: 1 / puzzleSize.height,
     })
     let connections = []
     let pieces = []
@@ -191,7 +191,15 @@ async function generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata) {
         },
         specs: {
             "size": puzzleSize,
-        }
+        },
+        ...(
+            backgroundImg && {
+                background: {
+                    image: 'background.png',
+                    url: computeFileUrl(levelName, 'background.png')
+                }
+            }
+        )
     }
     let levelFile = path.join(srcDir, "level.json")
     fs.writeFileSync(levelFile, JSON.stringify(level))
@@ -247,6 +255,7 @@ function handleGeneratePuzzle(req, res) {
     const levelName = `${req.query.level}`
     const srcDir = path.join(levelBaseDir, levelName);
     const image = req.files.image;
+    const background = req.files.background;
 
     if (fs.existsSync(srcDir)) {
         fs.rmdirSync(srcDir, {
@@ -256,14 +265,28 @@ function handleGeneratePuzzle(req, res) {
     }
     fs.mkdirSync(srcDir);
     const srcPath = path.join(srcDir, "src.png")
+    sharp()
+
     image.mv(srcPath, function (err) {
+        let backgroundImg
+        if (background) {
+            let backgroundPath = path.join(srcDir, "background.png")
+            sharp(req.files.background.data)
+                .resize({width: clientPixelsPerUnit * backgroundWorldSize.width, height: clientPixelsPerUnit * backgroundWorldSize.height, options: {fit:'outside'}})
+                .png().toFile(backgroundPath, function (err) {
+                    if (err) {
+                        console.log(err)
+                    }
+                })
+            backgroundImg = sharp(backgroundPath)
+        }
         if (err)
             return res.status(500).send(err);
 
         const srcImg = sharp(srcPath).png()
         console.log("src file: " + srcPath);
         srcImg.metadata().then((metadata) => {
-            generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata).then((level) => {
+            generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata, backgroundImg).then((level) => {
                 res.send(JSON.stringify(level))
             })
         })
