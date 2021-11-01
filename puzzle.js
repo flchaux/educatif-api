@@ -10,7 +10,7 @@ const vector = require('./vector')
 
 const maxWorldHeight = 8
 const clientPixelsPerUnit = 100;
-const backgroundWorldSize = { width: 16, height: 10 }
+const backgroundWorldSize = { width: 22, height: 10 }
 
 let connectionSize = {
     width: 17,
@@ -190,7 +190,11 @@ async function generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata, b
             height: worldSize.height
         },
         specs: {
-            "size": puzzleSize,
+            size: puzzleSize,
+            src: {
+                image: "src.png",
+                url: computeFileUrl(levelName, 'src.png')
+            }
         },
         ...(
             backgroundImg && {
@@ -237,12 +241,21 @@ function handleGeneratePuzzleWithExistingFile(req, res) {
     const srcDir = path.join(levelBaseDir, levelName);
     const srcPath = path.join(srcDir, "src.png")
     const srcImg = sharp(srcPath)
-
+    if (req.files?.background) {
+        let backgroundPath = path.join(srcDir, "background.png")
+        sharp(req.files.background.data)
+            .resize({width: clientPixelsPerUnit * backgroundWorldSize.width, height: clientPixelsPerUnit * backgroundWorldSize.height, options: {fit:'outside'}})
+            .png().toFile(backgroundPath, function (err) {
+                if (err) {
+                    console.log(err)
+                }
+            })
+    }
 
     console.log("src file: " + srcPath);
     srcImg.metadata()
         .then(function (metadata) {
-            generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata, req, res).then((level) => {
+            generatePuzzle(levelName, puzzleSize, srcDir, srcImg, metadata, true).then((level) => {
                 res.send(JSON.stringify(level))
             })
         });
@@ -254,7 +267,7 @@ function handleGeneratePuzzle(req, res) {
     const imageName = req.query.level
     const levelName = `${req.query.level}`
     const srcDir = path.join(levelBaseDir, levelName);
-    const image = req.files.image;
+    const srcImage = req.files.image;
     const background = req.files.background;
 
     if (fs.existsSync(srcDir)) {
@@ -265,9 +278,8 @@ function handleGeneratePuzzle(req, res) {
     }
     fs.mkdirSync(srcDir);
     const srcPath = path.join(srcDir, "src.png")
-    sharp()
 
-    image.mv(srcPath, function (err) {
+    srcImage.mv(srcPath, function (err) {
         let backgroundImg
         if (background) {
             let backgroundPath = path.join(srcDir, "background.png")
