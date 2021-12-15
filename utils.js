@@ -17,7 +17,7 @@ const utils = {
     
     computeTmpImagePath: (id) => {
         return path.join(tmpDir, id)
-    }
+    },
 
 }
 

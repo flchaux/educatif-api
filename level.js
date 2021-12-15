@@ -52,7 +52,14 @@ async function createPiece(levelName, piece) {
         fs.rmSync(path)
     }
 
-    let initialPosition = computePieceWorldPosition(piece.initialPosition, pieceSize, sizeRatio)
+    let position
+    if (piece.position) {
+        position = computePieceWorldPosition(piece.position, pieceSize, sizeRatio)
+    }
+    let initialPosition
+    if (piece.validPosition) {
+        initialPosition = computePieceWorldPosition(piece.initialPosition, pieceSize, sizeRatio)
+    }
     let validPosition = null
     if (piece.validPosition) {
         validPosition = computePieceWorldPosition(piece.validPosition, pieceSize, sizeRatio)
@@ -60,9 +67,11 @@ async function createPiece(levelName, piece) {
 
     return {
         image: destinationFileName,
+        position,
         initialPosition,
         validPosition,
         id: piece.id,
+        name: piece.name,
         url: computeFileUrl(levelName, destinationFileName)
     }
 }
@@ -125,7 +134,7 @@ async function createBasicLevel(levelName, inputPieces, background) {
 
     const srcDir = path.join(levelBaseDir, levelName);
     let backgroundPath = path.join(srcDir, "background.png")
-    if (background.imageId) {
+    if (background && background.imageId) {
         await sharp(computeTmpImagePath(background.imageId))
             .resize({ width: clientPixelsPerUnit * worldSize.width, height: clientPixelsPerUnit * worldSize.height, options: { fit: 'outside' } })
             .png().toFile(backgroundPath)

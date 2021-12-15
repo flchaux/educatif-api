@@ -67,7 +67,7 @@ app.delete('/delete', function (req, res) {
 })
 
 app.patch('/generate/puzzle', function (req, res) {
-    puzzle.handleGeneratePuzzleWithExistingFile(req, res);
+    puzzle.handleGeneratePuzzle(req, res);
 })
 app.post('/generate/puzzle', function (req, res) {
     puzzle.handleGeneratePuzzle(req, res);

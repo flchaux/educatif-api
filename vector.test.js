@@ -9,6 +9,14 @@ test('multiply', () => {
     expect(vector.multiply({ a: 12, b: 3, c: 4 }, { a: 2, b: 3, d: 6 }))
         .toEqual({ a: 24, b: 9, c: 0, d: 0 });
 });
+test('divide', () => {
+    expect(vector.divide({ a: 12, b: 3, c: 4 }, { a: 2, b: 3, d: 6 }))
+        .toEqual({ a: 6, b: 1, c: 0, d: 0 });
+});
+test('reverse', () => {
+    expect(vector.reverse({ a: 12, b: 3, c: 4 }))
+        .toEqual({ a: 1/12, b: 1/3, c: 1/4 });
+});
 
 test('multiply keep values', () => {
     expect(vector.multiply({ a: 12, b: 3, c: 4 }, { a: 2, b: 3, d: 6 }, true))

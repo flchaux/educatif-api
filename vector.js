@@ -6,6 +6,15 @@ function multiplyConstant(matrix, constant){
     }
     return result
 }
+
+function reverse(m){
+    let result = {}
+    for(let key in m){
+        result[key] = 1 / m[key]
+    }
+    return result
+}
+
 function multiply(m1, m2, keep = false){
     let result = {}
     for(let key in m1){
@@ -17,6 +26,11 @@ function multiply(m1, m2, keep = false){
     }
     return result
 }
+
+function divide(m1, m2, keep = false){
+    return multiply(m1, reverse(m2), keep)
+}
+
 function add(m1, m2){
     let result = {}
     for(let key in m1){
@@ -106,3 +120,5 @@ exports.round = round
 exports.switchCoordinateSystem = switchCoordinateSystem
 exports.computeBorderBounds = computeBorderBounds
 exports.computeCenterBounds = computeCenterBounds
+exports.divide = divide
+exports.reverse = reverse
