@@ -1,9 +1,9 @@
 
 const path = require('path')
 
-const port = 8081
-const domain = "localhost"
-const protocol = "http"
+const port = process.env.PORT //8081
+const domain = process.env.DOMAIN //"localhost"
+const protocol = process.env.PROTOCOL //"http"
 const dataDir = path.join(__dirname, 'data')
 const levelBaseDir = path.join(dataDir, 'levels')
 const tmpDir = 'tmp'
