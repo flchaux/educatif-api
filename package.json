@@ -15,9 +15,11 @@
     "express": "^4.17.1",
     "express-fileupload": "^1.2.1",
     "fs": "0.0.1-security",
+    "https": "^1.0.0",
     "jest": "^27.2.5",
     "nodemon": "^2.0.12",
-    "sharp": "^0.29.1",
+    "sharp": "^0.27.2",
     "uuid": "^8.3.2"
-  }
+  },
+  "why sharp 27.2?": "newer sharp version not compatible with my server processor"
 }

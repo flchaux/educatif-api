@@ -12,6 +12,7 @@ const fileUpload = require('express-fileupload');
 const {useListLevels} = require('./useListLevels');
 const { randomUUID } = require('crypto');
 const playlist = require('./playlist')
+const https = require('https')
 
 async function handleListLevels(req, res, filterType) {
     res.send(JSON.stringify(await useListLevels(filterType)))
@@ -35,7 +36,7 @@ app.use(fileUpload({
 app.use(function (req, res, next) {
 
     // Website you wish to allow to connect
-    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    //res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
 
     // Request methods you wish to allow
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -50,6 +51,8 @@ app.use(function (req, res, next) {
     // Pass to next layer of middleware
     next();
 });
+
+app.use('/admin', express.static(process.env.FRONT))
 
 app.get('/level/:level', function (req, res) {
     res.sendFile(computeFilePath(req.params.level, "level.json"))
@@ -122,5 +125,20 @@ app.post('/image', function (req, res) {
 
 console.log("Listen " + port);
 
-app.listen(port)
+if(process.env.PROTOCOL === 'https'){
+    const privateKey = fs.readFileSync(process.env.PRIVATE_KEY, 'utf8');
+    const certificate = fs.readFileSync(process.env.CERTIFICATE, 'utf8');
+    const ca = fs.readFileSync(process.env.CA, 'utf8');
+    const credentials = {
+        key: privateKey,
+        cert: certificate,
+        ca: ca
+    };
+
+    var httpsServer = https.createServer(credentials, app);
+    httpsServer.listen(port)
+}
+else{
+    app.listen(port)
+}
 
