@@ -107,6 +107,7 @@ async function createLevel(levelName, type, pieces, size, hasBackground, specs) 
         name: levelName,
         type: type,
         size: size,
+        ordered: true,
         pieces: pieces,
         ...(specs && { specs }),
         ...(
