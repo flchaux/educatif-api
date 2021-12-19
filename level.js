@@ -57,7 +57,7 @@ async function createPiece(levelName, piece) {
         position = computePieceWorldPosition(piece.position, pieceSize, sizeRatio)
     }
     let initialPosition
-    if (piece.validPosition) {
+    if (piece.initialPosition) {
         initialPosition = computePieceWorldPosition(piece.initialPosition, pieceSize, sizeRatio)
     }
     let validPosition = null
