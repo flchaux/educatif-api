@@ -53,7 +53,8 @@ app.use(function (req, res, next) {
     next();
 });
 
-app.use('/admin*', express.static(process.env.FRONT))
+app.use('/admin', express.static(process.env.FRONT))
+app.use('/admin/*', express.static(process.env.FRONT))
 
 app.get('/level/:level', function (req, res) {
     res.sendFile(computeFilePath(req.params.level, "level.json"))
